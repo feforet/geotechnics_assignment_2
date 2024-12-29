@@ -50,7 +50,7 @@ class Sol():
     
     def distance(self, x, y):
         d_sol = y
-        d_crest = y - self.H if y > self.H else np.inf
+        d_crest = y - self.H if y >= self.H else np.inf
         d_left = norm(np.cross(self.p2 - self.p1, self.p1 - np.array((x, y, 0)))) / norm(self.p2 - self.p1)
         d_right = norm(np.cross(self.p4 - self.p3, self.p3 - np.array((x, y, 0)))) / norm(self.p4 - self.p3)
         if (x < 24): return min(d_sol, d_left)
@@ -88,6 +88,7 @@ def hauteur_sat(x, cercle):
     return min(h_s, h_w) - h_c
 
 def calc_weight_ww(x_l, x_r, cercle):
+    if(abs(x_l - x_r) < 1e-3): return 0, 0
     w_dry = gamma_dry * sp.integrate.quad(hauteur_seche, x_l, x_r, args=(cercle, ))[0]
     w_water = gamma_w * sp.integrate.quad(hauteur_eau, x_l, x_r, args=(cercle, ))[0]
     w_sat = (gamma_sat - gamma_w) * sp.integrate.quad(hauteur_sat, x_l, x_r, args=(cercle, ))[0]
@@ -176,31 +177,29 @@ gamma_sat = 20
 gamma_w = 10
 
 ### Données de calcul
-e_tranches = 1/2
+e_tranches = 1/2*4
 
 def fs(x, y, r):
     cercle = Cercle(x, y, r)
     cercle.init_real()
     FS0 = fellenius(cercle)
-    print(FS0)
     FS_old = FS0
     FS = bishop(cercle, FS0)
     while (abs(FS - FS_old) > 1e-6):
-        print(FS)
         FS_old = FS
         FS = bishop(cercle, FS)
     return FS
 
 def find_worst_circle():
-    xs = np.arange(-3, 27, 1)
-    ys = np.arange(0, 100, 10)
+    xs = np.arange(28, 85, 1)
+    ys = np.arange(0, 70, 1)
     rs = np.ones((len(xs), len(ys))) * (-1)
     fss = np.full((len(xs), len(ys)), np.inf)
     for i, x in enumerate(xs):
         for j, y in enumerate(ys):
             if (y < sol.h_sol(x)): continue
             print(f"Calcul de fs pour x={x} et y={y}")
-            r_min = max(1, int(sol.distance(x, y)) + 3)
+            r_min = max(1, int(sol.distance(x, y)) + 1)
             r_max = 30 - x if x < 27 else x - 24
             for r in np.arange(r_min, r_max, 1):
                 cur_fs = fs(x, y, r)
@@ -212,13 +211,36 @@ def find_worst_circle():
     return xs, ys, rs, fss
 
 
-"""
-xs, ys, rs, fss = find_worst_circle()
-worst_fs = np.min(fss)
-coord = np.unravel_index(np.argmin(fss), fss.shape)
-x = xs[coord[0]]
-y = ys[coord[1]]
-r = rs[coord]
-print(f"Le pire facteur de sécurité est {worst_fs} pour un cercle de centre ({x}, {y}) et de rayon {r}")
-"""
-print(fs(62, 60, 60))
+def opti():
+    xs, ys, rs, fss = find_worst_circle()
+    worst_fs = np.min(fss)
+    coord = np.unravel_index(np.argmin(fss), fss.shape)
+    x = xs[coord[0]]
+    y = ys[coord[1]]
+    r = rs[coord]
+    print(f"Le pire facteur de sécurité est {worst_fs} pour un cercle de centre ({x}, {y}) et de rayon {r}")
+
+print(fs(61, 27, 36))
+
+cercle_test = Cercle(61, 27, 36)
+cercle_test.init_real()
+x_test = x_s(cercle_test)
+h_sol_test = np.array([sol.h_sol(x) for x in x_test])
+h_water_test = np.array([sol.h_water(x) for x in x_test])
+h_cercle_test = np.array([cercle_test.h(x) for x in x_test])
+hauteur_seche_test = np.array([hauteur_seche(x, cercle_test) for x in x_test])
+hauteur_eau_test = np.array([hauteur_eau(x, cercle_test) for x in x_test])
+hauteur_sat_test = np.array([hauteur_sat(x, cercle_test) for x in x_test])
+plt.axes().set_aspect('equal')
+ls_test = cercle_test.ls
+alphas_test = cercle_test.alphas
+Ns_test = cercle_test.Ns
+Ts_test = cercle_test.Ts
+Us_test = cercle_test.Us
+Ws_test = cercle_test.Ws
+plt.plot(x_test, np.zeros(len(x_test)), "black")
+plt.plot(x_test, h_sol_test, label="Sol")
+plt.plot(x_test, h_water_test, label="Niveau d'eau")
+plt.plot(x_test, h_cercle_test, label="Cercle")
+plt.legend()
+plt.show()
